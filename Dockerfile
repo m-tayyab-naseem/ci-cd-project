@@ -1,29 +1,20 @@
-# Use a smaller, more secure base image
-FROM node:20-alpine
+# Use official Node.js LTS image
+FROM node:18-alpine
 
-# Set environment to production
-ENV NODE_ENV=production
+# Set working directory
+WORKDIR /app
 
-# Set the working directory
-WORKDIR /usr/src/app
-
-# Copy package files
-COPY package.json package-lock.json* ./
-
-# Diagnostic: List files to ensure lockfile is present
-RUN ls -la
+# Copy package files first (for Docker layer caching)
+COPY package*.json ./
 
 # Install only production dependencies
-RUN npm install --omit=dev
+RUN npm ci --only=production
 
-# Copy the rest of the application code
+# Copy rest of the app
 COPY . .
 
-# Use a non-root user for security
-USER node
+# Expose your Express port
+EXPOSE 3000
 
-# Expose the application port
-EXPOSE 5000
-
-# Start the application
-CMD ["node", "server.js"]
+# Start the app
+CMD ["node", "index.js"]
