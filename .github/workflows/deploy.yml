@@ -1,0 +1,83 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches: [main]
+
+env:
+  IMAGE_NAME: ghcr.io/${{ github.repository_owner }}/myapp
+
+jobs:
+  build-test-deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    # 1. Pull the code
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    # 2. Setup Node.js
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: 'npm'
+
+    # 3. Install & Test
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Run tests
+      run: npm test
+
+    # 4. Login to GitHub Container Registry
+    - name: Login to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ secrets.GHCR_TOKEN }}
+
+    # 5. Build & push Docker image
+    - name: Build and push image
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        push: true
+        tags: |
+          ${{ env.IMAGE_NAME }}:latest
+          ${{ env.IMAGE_NAME }}:${{ github.sha }}
+
+    # 6. SSH into Droplet and deploy
+    - name: Deploy to Droplet
+      uses: appleboy/ssh-action@v1.0.3
+      with:
+        host: ${{ secrets.DROPLET_IP }}
+        username: root
+        key: ${{ secrets.SSH_PRIVATE_KEY }}
+        script: |
+          # Login to GHCR on the server
+          echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+          # Pull the latest image
+          docker pull ${{ env.IMAGE_NAME }}:latest
+
+          # Stop & remove old container (ignore errors if it doesn't exist)
+          docker stop myapp || true
+          docker rm myapp || true
+
+          # Start new container
+          docker run -d \
+            --name myapp \
+            --restart unless-stopped \
+            -p 80:3000 \
+            ${{ env.IMAGE_NAME }}:latest
+
+          # Confirm it's running
+          docker ps | grep myapp
+
+    # 7. Health check after deploy
+    - name: Health check
+      run: |
+        sleep 10
+        curl --fail http://${{ secrets.DROPLET_IP }}/health || exit 1

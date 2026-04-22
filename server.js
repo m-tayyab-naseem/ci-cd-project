@@ -30,6 +30,15 @@ app.post('/items', async (req, res) => {
   }
 });
 
+// Health check endpoint — required by the CI/CD pipeline
+app.get('/health', (req, res) => {
+  res.status(200).json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
+});
+
 app.get('/items', async (req, res) => {
   const items = await Item.find();
   res.json(items);
