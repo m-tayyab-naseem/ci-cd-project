@@ -71,6 +71,7 @@ jobs:
             --name myapp \
             --restart unless-stopped \
             -p 80:3000 \
+            -e MONGODB_URI="${{ secrets.MONGO_URI }}" \
             ${{ env.IMAGE_NAME }}:latest
 
           # Confirm it's running
